@@ -1,0 +1,16 @@
+{
+  "name": "web-crawl",
+  "version": "1.0.0",
+  "description": "Crawl a website and export all content as Markdown",
+  "type": "module",
+  "scripts": {
+    "crawl": "node --experimental-vm-modules crawl.mjs"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "turndown": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/turndown": "^5.0.5"
+  }
+}

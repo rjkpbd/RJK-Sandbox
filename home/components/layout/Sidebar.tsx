@@ -1,11 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutDashboard, ChevronLeft, ChevronRight, Boxes } from "lucide-react";
+import { ChevronLeft, ChevronRight, Boxes } from "lucide-react";
 import SidebarLink from "./SidebarLink";
 import moduleRegistry from "@/lib/moduleRegistry";
 
-export default function Sidebar() {
+interface SidebarProps {
+  isAdmin: boolean;
+}
+
+export default function Sidebar({ isAdmin }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -24,8 +28,11 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {/* Always-present dashboard link */}
-        <SidebarLink href="/" icon="LayoutDashboard" label="Dashboard" collapsed={collapsed} />
+        {isAdmin ? (
+          <SidebarLink href="/admin" icon="LayoutDashboard" label="Dashboard" collapsed={collapsed} />
+        ) : (
+          <SidebarLink href="/dashboard" icon="LayoutDashboard" label="Dashboard" collapsed={collapsed} />
+        )}
 
         {/* Module links */}
         {moduleRegistry.length > 0 && (
@@ -49,8 +56,10 @@ export default function Sidebar() {
         )}
       </nav>
 
-      {/* Collapse toggle */}
-      <div className="px-2 py-3 border-t border-slate-700">
+      {/* Bottom links */}
+      <div className="px-2 py-2 border-t border-slate-700 space-y-1">
+        <SidebarLink href="/settings" icon="Settings" label="Settings" collapsed={collapsed} />
+
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm ${collapsed ? "justify-center" : ""}`}

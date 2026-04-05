@@ -1,0 +1,72 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: home
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      serviceAccountName: 843833531624-compute@developer.gserviceaccount.com
+      containers:
+        - image: IMAGE  # e.g. gcr.io/pbd-rjk/home:latest
+          ports:
+            - containerPort: 3000
+          env:
+            # Non-sensitive env vars — set directly
+            - name: NODE_ENV
+              value: production
+            - name: NEXT_PUBLIC_SUPABASE_URL
+              value: https://vzwblrdtltsrdimrjutf.supabase.co
+            - name: NEXT_PUBLIC_APP_URL
+              value: https://YOUR_CLOUD_RUN_URL  # update after first deploy
+
+            # Secrets — pulled from Google Cloud Secret Manager at runtime
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: SUPABASE_SERVICE_ROLE_KEY  # Secret Manager secret name
+                  key: latest
+            - name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+                  key: latest
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: GOOGLE_CLIENT_ID
+                  key: latest
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: GOOGLE_CLIENT_SECRET
+                  key: latest
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: SESSION_SECRET
+                  key: latest
+            - name: QUICKBOOKS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: QUICKBOOKS_CLIENT_ID
+                  key: latest
+            - name: QUICKBOOKS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: QUICKBOOKS_CLIENT_SECRET
+                  key: latest
+            - name: QUICKBOOKS_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: QUICKBOOKS_REDIRECT_URI
+                  key: latest
+            - name: QUICKBOOKS_SANDBOX
+              valueFrom:
+                secretKeyRef:
+                  name: QUICKBOOKS_SANDBOX
+                  key: latest

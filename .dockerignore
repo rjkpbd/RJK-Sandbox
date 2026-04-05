@@ -1,0 +1,6 @@
+home/node_modules
+home/.next
+home/.env*
+home/.env.local
+.git
+.claude

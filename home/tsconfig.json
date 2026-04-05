@@ -20,7 +20,8 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@shared/*": ["../shared/*"]
+      "@shared/*": ["../shared/*"],
+      "@supabase/supabase-js": ["./node_modules/@supabase/supabase-js"]
     }
   },
   "include": [
@@ -29,7 +30,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "../shared/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

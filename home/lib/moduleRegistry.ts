@@ -1,19 +1,20 @@
 import type { ModuleEntry } from "@/types/modules";
+import PBDFinanceWidget from "@/components/modules/pbd-finance/PBDFinanceWidget";
 
 // Add new modules here. The sidebar and widget grid are driven by this list.
 const moduleRegistry: ModuleEntry[] = [
-  // Example entry (uncomment and fill in when adding a module):
-  // {
-  //   id: "my-module",
-  //   label: "My Module",
-  //   href: "/modules/my-module",
-  //   icon: "LayoutDashboard",
-  //   description: "What this module does",
-  //   widget: {
-  //     component: MyWidget,
-  //     size: "medium",
-  //   },
-  // },
+  {
+    id: "pbd-finance",
+    label: "PBD Finance",
+    href: "/modules/pbd-finance",
+    icon: "TrendingUp",
+    description: "Income statement & accounts receivable via QuickBooks Online",
+    widget: {
+      component: PBDFinanceWidget,
+      size: "medium",
+    },
+    tags: ["finance", "quickbooks"],
+  },
 ];
 
 export default moduleRegistry;
