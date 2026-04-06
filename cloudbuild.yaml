@@ -6,17 +6,17 @@ steps:
       - -f
       - home/Dockerfile
       - -t
-      - gcr.io/$PROJECT_ID/rjk-sandbox:$COMMIT_SHA
+      - us-central1-docker.pkg.dev/$PROJECT_ID/rjk-sandbox/rjk-sandbox:$COMMIT_SHA
       - -t
-      - gcr.io/$PROJECT_ID/rjk-sandbox:latest
+      - us-central1-docker.pkg.dev/$PROJECT_ID/rjk-sandbox/rjk-sandbox:latest
       - .
 
-  # Push to Container Registry
+  # Push to Artifact Registry
   - name: gcr.io/cloud-builders/docker
     args:
       - push
       - --all-tags
-      - gcr.io/$PROJECT_ID/rjk-sandbox
+      - us-central1-docker.pkg.dev/$PROJECT_ID/rjk-sandbox/rjk-sandbox
 
   # Deploy to Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -25,7 +25,7 @@ steps:
       - run
       - deploy
       - rjk-sandbox
-      - --image=gcr.io/$PROJECT_ID/rjk-sandbox:$COMMIT_SHA
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/rjk-sandbox/rjk-sandbox:$COMMIT_SHA
       - --region=us-central1
       - --project=$PROJECT_ID
       - --platform=managed
@@ -34,8 +34,8 @@ steps:
       - --set-secrets=SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,NEXT_PUBLIC_SUPABASE_ANON_KEY=NEXT_PUBLIC_SUPABASE_ANON_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,QUICKBOOKS_CLIENT_ID=QUICKBOOKS_CLIENT_ID:latest,QUICKBOOKS_CLIENT_SECRET=QUICKBOOKS_CLIENT_SECRET:latest,QUICKBOOKS_REDIRECT_URI=QUICKBOOKS_REDIRECT_URI:latest,QUICKBOOKS_SANDBOX=QUICKBOOKS_SANDBOX:latest
 
 images:
-  - gcr.io/$PROJECT_ID/rjk-sandbox:$COMMIT_SHA
-  - gcr.io/$PROJECT_ID/rjk-sandbox:latest
+  - us-central1-docker.pkg.dev/$PROJECT_ID/rjk-sandbox/rjk-sandbox:$COMMIT_SHA
+  - us-central1-docker.pkg.dev/$PROJECT_ID/rjk-sandbox/rjk-sandbox:latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
