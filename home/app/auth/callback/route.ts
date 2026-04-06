@@ -4,13 +4,14 @@ import { createServerClient } from "@/lib/supabase-server";
 import { ADMIN_EMAIL } from "@/lib/constants";
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const storedState = request.cookies.get("oauth_state")?.value;
 
   if (!code || !state || state !== storedState) {
-    return NextResponse.redirect(`${origin}/login?error=auth`);
+    return NextResponse.redirect(`${appUrl}/login?error=auth`);
   }
 
   // Exchange authorization code for tokens
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${origin}/login?error=auth`);
+    return NextResponse.redirect(`${appUrl}/login?error=auth`);
   }
 
   const { access_token } = await tokenRes.json();
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!userRes.ok) {
-    return NextResponse.redirect(`${origin}/login?error=auth`);
+    return NextResponse.redirect(`${appUrl}/login?error=auth`);
   }
 
   const { sub, email, name, picture } = await userRes.json();
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
   const sessionToken = await createSessionToken({ sub, email, name, picture, role });
   const destination = role === "admin" ? "/admin" : "/dashboard";
 
-  const response = NextResponse.redirect(`${origin}${destination}`);
+  const response = NextResponse.redirect(`${appUrl}${destination}`);
   response.cookies.set(cookieOptions.name, sessionToken, cookieOptions);
   response.cookies.delete("oauth_state");
 
