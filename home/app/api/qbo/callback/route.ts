@@ -12,9 +12,10 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const storedState = cookieStore.get("qbo_oauth_state")?.value;
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin;
   const redirect = (err: string) =>
     NextResponse.redirect(
-      new URL(`/modules/pbd-finance?error=${err}`, request.url)
+      new URL(`/modules/pbd-finance?error=${err}`, appUrl)
     );
 
   if (error) return redirect("auth_denied");
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
     cookieStore.delete("qbo_oauth_state");
 
     return NextResponse.redirect(
-      new URL("/modules/pbd-finance", request.url)
+      new URL("/modules/pbd-finance", appUrl)
     );
   } catch (err) {
     console.error("QBO callback error:", err);
