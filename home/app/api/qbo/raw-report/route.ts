@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const params: Record<string, string> = {};
-    if (report === "ProfitAndLoss") {
+    if (report === "AgedReceivables" || report === "AgedReceivableDetail") {
+      // no extra params needed for AR reports
+    } else if (report === "ProfitAndLoss") {
       const { start_date, end_date } = lastNMonthsRange(3);
       params.start_date = start_date;
       params.end_date = end_date;
