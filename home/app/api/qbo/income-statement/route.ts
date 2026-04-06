@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import {
   fetchQBOReport,
   parseProfitAndLoss,
-  lastNMonthsRange,
+  monthRanges,
   QBOAuthError,
+  type ProfitAndLossData,
 } from "@/lib/quickbooks";
 import { getQBOSession } from "../_auth";
 
@@ -14,14 +15,35 @@ export async function GET() {
   }
 
   try {
-    const { start_date, end_date } = lastNMonthsRange(3);
-    const raw = await fetchQBOReport(
-      session.realmId,
-      session.accessToken,
-      "ProfitAndLoss",
-      { start_date, end_date, summarize_column_by: "Month" }
+    const ranges = monthRanges(3);
+
+    // Fetch each month as a separate single-period report; this is more reliable
+    // than summarize_column_by=Month which QBO sometimes ignores.
+    const reports = await Promise.all(
+      ranges.map((r) =>
+        fetchQBOReport(session.realmId, session.accessToken, "ProfitAndLoss", {
+          start_date: r.start_date,
+          end_date: r.end_date,
+        })
+      )
     );
-    return NextResponse.json(parseProfitAndLoss(raw));
+
+    // Parse each individually (single Money column = the month's total)
+    const parsed = reports.map((r) => parseProfitAndLoss(r));
+
+    // Merge: columns = month labels, amounts = [jan, feb, mar] per row
+    const merged: ProfitAndLossData = {
+      columns: ranges.map((r) => r.label),
+      rows: parsed[0].rows.map((row) => ({
+        ...row,
+        amounts: parsed.map((p) => {
+          const match = p.rows.find((r) => r.label === row.label);
+          return match?.amounts[0] ?? null;
+        }),
+      })),
+    };
+
+    return NextResponse.json(merged);
   } catch (err) {
     if (err instanceof QBOAuthError) {
       return NextResponse.json({ error: "token_expired" }, { status: 401 });

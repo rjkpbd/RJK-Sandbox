@@ -393,3 +393,22 @@ export function lastNMonthsRange(n: number): {
   const fmt = (d: Date) => d.toISOString().split("T")[0];
   return { start_date: fmt(start), end_date: fmt(end) };
 }
+
+/** Returns one {start_date, end_date, label} entry per complete calendar month,
+ *  oldest first. e.g. for n=3 today Apr 2026: Jan, Feb, Mar 2026. */
+export function monthRanges(
+  n: number
+): { start_date: string; end_date: string; label: string }[] {
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  const result = [];
+  // most-recent complete month index = now.getMonth() - 1
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - 1 - i, 1);
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const label = start.toLocaleString("en-US", { month: "short", year: "numeric" });
+    result.push({ start_date: fmt(start), end_date: fmt(end), label });
+  }
+  return result;
+}
