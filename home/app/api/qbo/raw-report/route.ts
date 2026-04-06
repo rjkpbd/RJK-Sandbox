@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
       const { start_date, end_date } = lastNMonthsRange(3);
       params.start_date = start_date;
       params.end_date = end_date;
-      params.summarize_column_by = "Month";
     }
     const raw = await fetchQBOReport(session.realmId, session.accessToken, report, params);
     return NextResponse.json(raw);
