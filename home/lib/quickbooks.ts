@@ -281,8 +281,10 @@ export function parseProfitAndLoss(report: QBOReport): ProfitAndLossData {
   return { columns, rows };
 }
 
-// AgedReceivableSummary — one Data row per customer, columns:
-// [0] Customer  [1] Current  [2] 1-30  [3] 31-60  [4] 61-90  [5] >90  [6] TOTAL
+// AgedReceivables (summary) — QBO emits one Section per customer (with amounts
+// in Summary.ColData) plus a GrandTotal Section at the end. Some versions emit
+// flat Data rows instead — we handle both.
+// Columns: [0] Customer  [1] Current  [2] 1-30  [3] 31-60  [4] 61-90  [5] >90  [6] TOTAL
 export function parseAccountsReceivable(
   report: QBOReport
 ): AccountsReceivableData {
@@ -292,37 +294,40 @@ export function parseAccountsReceivable(
     current: 0, days1_30: 0, days31_60: 0, days61_90: 0, days91plus: 0, total: 0,
   };
 
+  function buckets(cols: QBOColValue[]): Omit<ARCustomerRow, "customer"> {
+    return {
+      current:    parseAmount(cols[1]?.value) ?? 0,
+      days1_30:   parseAmount(cols[2]?.value) ?? 0,
+      days31_60:  parseAmount(cols[3]?.value) ?? 0,
+      days61_90:  parseAmount(cols[4]?.value) ?? 0,
+      days91plus: parseAmount(cols[5]?.value) ?? 0,
+      total:      parseAmount(cols[6]?.value) ?? 0,
+    };
+  }
+
   for (const row of report.Rows?.Row ?? []) {
     if (row.type === "Data") {
+      // Flat Data row per customer
       const cols = (row as QBODataRow).ColData;
       const customer = cols[0]?.value ?? "";
-      if (!customer) continue;
-      customers.push({
-        customer,
-        current:    parseAmount(cols[1]?.value) ?? 0,
-        days1_30:   parseAmount(cols[2]?.value) ?? 0,
-        days31_60:  parseAmount(cols[3]?.value) ?? 0,
-        days61_90:  parseAmount(cols[4]?.value) ?? 0,
-        days91plus: parseAmount(cols[5]?.value) ?? 0,
-        total:      parseAmount(cols[6]?.value) ?? 0,
-      });
+      if (customer) customers.push({ customer, ...buckets(cols) });
     } else if (row.type === "Section") {
-      // GrandTotal section — summary holds the footer row
-      const cols = (row as QBOSectionRow).Summary?.ColData ?? [];
-      if (cols.length >= 7) {
-        totals = {
-          current:    parseAmount(cols[1]?.value) ?? 0,
-          days1_30:   parseAmount(cols[2]?.value) ?? 0,
-          days31_60:  parseAmount(cols[3]?.value) ?? 0,
-          days61_90:  parseAmount(cols[4]?.value) ?? 0,
-          days91plus: parseAmount(cols[5]?.value) ?? 0,
-          total:      parseAmount(cols[6]?.value) ?? 0,
-        };
+      const section = row as QBOSectionRow;
+      const cols = section.Summary?.ColData ?? [];
+      if (cols.length < 7) continue;
+      const label = cols[0]?.value ?? "";
+      const isGrandTotal =
+        section.group === "GrandTotal" ||
+        label.toLowerCase().replace(/\s/g, "") === "total";
+      if (isGrandTotal) {
+        totals = buckets(cols);
+      } else if (label) {
+        customers.push({ customer: label, ...buckets(cols) });
       }
     }
   }
 
-  // If QBO didn't include a grand-total section, sum from customer rows
+  // Derive totals by summing if GrandTotal section wasn't found
   if (totals.total === 0 && customers.length > 0) {
     for (const c of customers) {
       totals.current    += c.current;
