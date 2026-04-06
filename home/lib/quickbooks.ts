@@ -281,9 +281,8 @@ export function parseProfitAndLoss(report: QBOReport): ProfitAndLossData {
   return { columns, rows };
 }
 
-// AgedReceivables (summary) — QBO emits one Section per customer (with amounts
-// in Summary.ColData) plus a GrandTotal Section at the end. Some versions emit
-// flat Data rows instead — we handle both.
+// AgedReceivables (summary) — QBO emits rows with bare ColData arrays (no
+// `type` field) for each customer, plus a GrandTotal Section at the end.
 // Columns: [0] Customer  [1] Current  [2] 1-30  [3] 31-60  [4] 61-90  [5] >90  [6] TOTAL
 export function parseAccountsReceivable(
   report: QBOReport
@@ -306,24 +305,17 @@ export function parseAccountsReceivable(
   }
 
   for (const row of report.Rows?.Row ?? []) {
-    if (row.type === "Data") {
-      // Flat Data row per customer
-      const cols = (row as QBODataRow).ColData;
-      const customer = cols[0]?.value ?? "";
-      if (customer) customers.push({ customer, ...buckets(cols) });
-    } else if (row.type === "Section") {
+    const anyRow = row as Record<string, unknown>;
+    if (row.type === "Section") {
+      // GrandTotal footer
       const section = row as QBOSectionRow;
       const cols = section.Summary?.ColData ?? [];
-      if (cols.length < 7) continue;
-      const label = cols[0]?.value ?? "";
-      const isGrandTotal =
-        section.group === "GrandTotal" ||
-        label.toLowerCase().replace(/\s/g, "") === "total";
-      if (isGrandTotal) {
-        totals = buckets(cols);
-      } else if (label) {
-        customers.push({ customer: label, ...buckets(cols) });
-      }
+      if (cols.length >= 7) totals = buckets(cols);
+    } else if (Array.isArray(anyRow["ColData"])) {
+      // Customer row — bare ColData with no type field
+      const cols = anyRow["ColData"] as QBOColValue[];
+      const customer = cols[0]?.value ?? "";
+      if (customer) customers.push({ customer, ...buckets(cols) });
     }
   }
 
