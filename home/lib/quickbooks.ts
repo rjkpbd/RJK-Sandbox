@@ -202,6 +202,23 @@ export interface AccountsReceivableData {
   totals: Omit<ARCustomerRow, "customer">;
 }
 
+export type ARBucket = "current" | "days1_30" | "days31_60" | "days61_90" | "days91plus";
+
+export interface ARDetailTransaction {
+  type: string;       // e.g. "Invoice"
+  date: string;
+  num: string;
+  dueDate: string;
+  aging: number;      // days past due (0 = current, positive = overdue)
+  openBalance: number;
+  bucket: ARBucket;
+}
+
+export interface ARDetailData {
+  asOf: string;
+  byCustomer: Record<string, ARDetailTransaction[]>;
+}
+
 // ─── Parsers ─────────────────────────────────────────────────────────────────
 
 function parseAmount(value: string | undefined): number | null {
@@ -220,11 +237,22 @@ const SECTION_ORDER: { group: string; label: string; highlighted?: boolean }[] =
   ];
 
 export function parseProfitAndLoss(report: QBOReport): ProfitAndLossData {
-  // Column headers — skip the first (label) column, keep only Money columns
+  // Column headers — skip Account column, keep Money columns.
+  // QBO adds a "Total" or "TOTAL" column at the end when summarizing by Month;
+  // we strip it so we only show per-month columns.
   const rawCols = report.Header.Columns?.Column ?? [];
   const moneyCols = rawCols.filter((c) => c.ColType === "Money");
-  const columns = moneyCols.map((c) => c.ColTitle);
-  const numCols = columns.length || 1;
+  const TOTAL_TITLES = new Set(["total", "totals"]);
+  const monthCols = moneyCols.filter(
+    (c) => !TOTAL_TITLES.has(c.ColTitle.trim().toLowerCase())
+  );
+  // Fall back to all money cols if filtering removed everything
+  const activeCols = monthCols.length > 0 ? monthCols : moneyCols;
+  const columns = activeCols.map((c) => c.ColTitle);
+
+  // Map each active column to its index within all money cols (1-based in ColData)
+  const moneyColIndices = activeCols.map((col) => moneyCols.indexOf(col) + 1);
+  const numCols = Math.max(columns.length, 1);
 
   const rows: ProfitAndLossRow[] = [];
   const sectionMap = new Map<string, QBOSectionRow>();
@@ -240,10 +268,12 @@ export function parseProfitAndLoss(report: QBOReport): ProfitAndLossData {
     if (!section) continue;
 
     const summaryData = section.Summary?.ColData ?? [];
-    // First element is label, rest are amounts
-    const amounts = Array.from({ length: numCols }, (_, i) =>
-      parseAmount(summaryData[i + 1]?.value)
-    );
+    const amounts =
+      moneyColIndices.length > 0
+        ? moneyColIndices.map((idx) => parseAmount(summaryData[idx]?.value))
+        : Array.from({ length: numCols }, (_, i) =>
+            parseAmount(summaryData[i + 1]?.value)
+          );
 
     rows.push({ label, amounts, isSummary: true, isHighlighted: highlighted });
   }
@@ -251,54 +281,103 @@ export function parseProfitAndLoss(report: QBOReport): ProfitAndLossData {
   return { columns, rows };
 }
 
+// AgedReceivableSummary — one Data row per customer, columns:
+// [0] Customer  [1] Current  [2] 1-30  [3] 31-60  [4] 61-90  [5] >90  [6] TOTAL
 export function parseAccountsReceivable(
   report: QBOReport
 ): AccountsReceivableData {
   const asOf = report.Header.EndPeriod ?? "";
   const customers: ARCustomerRow[] = [];
+  let totals: AccountsReceivableData["totals"] = {
+    current: 0, days1_30: 0, days31_60: 0, days61_90: 0, days91plus: 0, total: 0,
+  };
+
+  for (const row of report.Rows?.Row ?? []) {
+    if (row.type === "Data") {
+      const cols = (row as QBODataRow).ColData;
+      const customer = cols[0]?.value ?? "";
+      if (!customer) continue;
+      customers.push({
+        customer,
+        current:    parseAmount(cols[1]?.value) ?? 0,
+        days1_30:   parseAmount(cols[2]?.value) ?? 0,
+        days31_60:  parseAmount(cols[3]?.value) ?? 0,
+        days61_90:  parseAmount(cols[4]?.value) ?? 0,
+        days91plus: parseAmount(cols[5]?.value) ?? 0,
+        total:      parseAmount(cols[6]?.value) ?? 0,
+      });
+    } else if (row.type === "Section") {
+      // GrandTotal section — summary holds the footer row
+      const cols = (row as QBOSectionRow).Summary?.ColData ?? [];
+      if (cols.length >= 7) {
+        totals = {
+          current:    parseAmount(cols[1]?.value) ?? 0,
+          days1_30:   parseAmount(cols[2]?.value) ?? 0,
+          days31_60:  parseAmount(cols[3]?.value) ?? 0,
+          days61_90:  parseAmount(cols[4]?.value) ?? 0,
+          days91plus: parseAmount(cols[5]?.value) ?? 0,
+          total:      parseAmount(cols[6]?.value) ?? 0,
+        };
+      }
+    }
+  }
+
+  // If QBO didn't include a grand-total section, sum from customer rows
+  if (totals.total === 0 && customers.length > 0) {
+    for (const c of customers) {
+      totals.current    += c.current;
+      totals.days1_30   += c.days1_30;
+      totals.days31_60  += c.days31_60;
+      totals.days61_90  += c.days61_90;
+      totals.days91plus += c.days91plus;
+      totals.total      += c.total;
+    }
+  }
+
+  return { asOf, customers, totals };
+}
+
+function agingToBucket(days: number): ARBucket {
+  if (days <= 0)  return "current";
+  if (days <= 30) return "days1_30";
+  if (days <= 60) return "days31_60";
+  if (days <= 90) return "days61_90";
+  return "days91plus";
+}
+
+// AgedReceivableDetail — sections per customer, Data rows per transaction.
+// Columns: [0] Type  [1] Date  [2] Num  [3] Due Date  [4] Aging  [5] Amount  [6] Open Balance
+export function parseARDetail(report: QBOReport): ARDetailData {
+  const asOf = report.Header.EndPeriod ?? "";
+  const byCustomer: Record<string, ARDetailTransaction[]> = {};
 
   for (const row of report.Rows?.Row ?? []) {
     if (row.type !== "Section") continue;
-
     const section = row as QBOSectionRow;
-    // Each customer is a Section; summary row has their totals by bucket
-    const summaryData = section.Summary?.ColData ?? [];
-    if (summaryData.length < 7) continue;
+    const customer = section.Header?.ColData?.[0]?.value ?? "";
+    if (!customer) continue;
 
-    const customer = summaryData[0]?.value ?? "";
-    if (!customer || customer.toLowerCase() === "total") continue;
-
-    customers.push({
-      customer,
-      current: parseAmount(summaryData[1]?.value) ?? 0,
-      days1_30: parseAmount(summaryData[2]?.value) ?? 0,
-      days31_60: parseAmount(summaryData[3]?.value) ?? 0,
-      days61_90: parseAmount(summaryData[4]?.value) ?? 0,
-      days91plus: parseAmount(summaryData[5]?.value) ?? 0,
-      total: parseAmount(summaryData[6]?.value) ?? 0,
-    });
+    const txns: ARDetailTransaction[] = [];
+    for (const txnRow of section.Rows?.Row ?? []) {
+      if (txnRow.type !== "Data") continue;
+      const cols = (txnRow as QBODataRow).ColData;
+      const agingDays = parseInt(cols[4]?.value ?? "0", 10);
+      const openBalance = parseAmount(cols[6]?.value) ?? 0;
+      if (openBalance === 0) continue; // skip fully paid
+      txns.push({
+        type:        cols[0]?.value ?? "",
+        date:        cols[1]?.value ?? "",
+        num:         cols[2]?.value ?? "",
+        dueDate:     cols[3]?.value ?? "",
+        aging:       isNaN(agingDays) ? 0 : agingDays,
+        openBalance,
+        bucket:      agingToBucket(isNaN(agingDays) ? 0 : agingDays),
+      });
+    }
+    if (txns.length > 0) byCustomer[customer] = txns;
   }
 
-  // Find the overall totals row (last Section with "TOTAL" in label, or last row)
-  const lastRow = report.Rows?.Row?.findLast(
-    (r) =>
-      r.type === "Section" &&
-      (r as QBOSectionRow).Summary?.ColData?.[0]?.value
-        ?.toLowerCase()
-        .includes("total")
-  ) as QBOSectionRow | undefined;
-
-  const totalsData = lastRow?.Summary?.ColData ?? [];
-  const totals = {
-    current: parseAmount(totalsData[1]?.value) ?? 0,
-    days1_30: parseAmount(totalsData[2]?.value) ?? 0,
-    days31_60: parseAmount(totalsData[3]?.value) ?? 0,
-    days61_90: parseAmount(totalsData[4]?.value) ?? 0,
-    days91plus: parseAmount(totalsData[5]?.value) ?? 0,
-    total: parseAmount(totalsData[6]?.value) ?? 0,
-  };
-
-  return { asOf, customers, totals };
+  return { asOf, byCustomer };
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
