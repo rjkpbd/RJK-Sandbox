@@ -22,9 +22,9 @@ export interface NotionSelectOption {
 
 export interface TaskProperty {
   type: string;
-  // For title, rich_text, url, email, phone, number, date, checkbox
+  // For title, rich_text, url, email, phone, number, date, checkbox, formula
   value: string | null;
-  // For multi-value properties (multi_select, people)
+  // For multi-value properties (multi_select, people, relation)
   values: string[] | null;
   // Color metadata for select / status
   color: string | null;
@@ -48,7 +48,7 @@ export interface FilterOption {
 
 export interface TasksApiResponse {
   tasks: NotionTask[];
-  // Columns to display (in order: name first, then by priority)
+  // Columns to display (in priority order; name column is always first)
   columns: string[];
   // Filter options per filterable property
   filters: FilterOption[];
@@ -87,6 +87,11 @@ function parseProperty(prop: RawProperty): TaskProperty {
       const arr = (prop.people as Array<{ name?: string; id: string }>) ?? [];
       return { type, value: null, values: arr.map((p) => p.name ?? p.id), color: null, itemColors: null };
     }
+    case "relation": {
+      // Returns raw page IDs — resolved to titles in a post-processing step
+      const arr = (prop.relation as Array<{ id: string }>) ?? [];
+      return { type, value: null, values: arr.map((r) => r.id), color: null, itemColors: null };
+    }
     case "date": {
       const d = prop.date as { start: string; end?: string | null } | null;
       return { type, value: d?.start ?? null, values: null, color: null, itemColors: null };
@@ -114,13 +119,56 @@ function parseProperty(prop: RawProperty): TaskProperty {
   }
 }
 
+// Fetch the title of a Notion page by its ID
+async function fetchPageTitle(pageId: string): Promise<string | null> {
+  try {
+    const res = await notionFetch(`/pages/${pageId}`);
+    if (!res.ok) return null;
+    const page = await res.json();
+    for (const prop of Object.values(page.properties as Record<string, RawProperty>)) {
+      if (prop.type === "title") {
+        const arr = (prop.title as Array<{ plain_text: string }>) ?? [];
+        return arr.map((t) => t.plain_text).join("") || null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Batch-resolve relation page IDs to titles, with concurrency limiting
+async function resolveRelationTitles(pageIds: Set<string>): Promise<Map<string, string>> {
+  const idToTitle = new Map<string, string>();
+  const ids = Array.from(pageIds);
+  const BATCH_SIZE = 8;
+
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(batch.map((id) => fetchPageTitle(id)));
+    batch.forEach((id, j) => {
+      if (results[j]) idToTitle.set(id, results[j]!);
+    });
+  }
+
+  return idToTitle;
+}
+
 // Priority order for columns — match common property names case-insensitively
-const COLUMN_PRIORITY = ["name", "status", "assignee", "assigned to", "owner", "client", "company", "project", "priority", "due date", "due", "date"];
+const COLUMN_PRIORITY = ["status", "assignee", "assigned to", "owner", "client", "company", "project", "priority", "due date", "due", "date", "tags", "frequency"];
 
 function columnSortKey(name: string): number {
   const lower = name.toLowerCase();
   const idx = COLUMN_PRIORITY.findIndex((p) => lower.includes(p));
   return idx === -1 ? COLUMN_PRIORITY.length : idx;
+}
+
+// Relation properties that should be displayed and filtered (skip noisy ones like Meetings)
+const RELATION_DISPLAY_ALLOWLIST = ["client", "project", "company", "account"];
+
+function shouldDisplayRelation(name: string): boolean {
+  const lower = name.toLowerCase();
+  return RELATION_DISPLAY_ALLOWLIST.some((k) => lower.includes(k));
 }
 
 export async function GET() {
@@ -181,42 +229,68 @@ export async function GET() {
         }
       }
 
-      tasks.push({
-        id: page.id,
-        url: page.url,
-        name,
-        lastEdited: page.last_edited_time,
-        properties: props,
-      });
+      tasks.push({ id: page.id, url: page.url, name, lastEdited: page.last_edited_time, properties: props });
     }
 
     cursor = data.has_more ? (data.next_cursor as string) : undefined;
   } while (cursor);
 
-  // Determine visible columns (excluding title — shown separately as name)
-  const filterableTypes = new Set(["select", "multi_select", "people", "status"]);
-  const displayableTypes = new Set(["select", "multi_select", "people", "status", "date", "rich_text", "checkbox", "number", "url", "formula"]);
+  // Collect unique relation page IDs for displayable relation properties
+  const relationPageIds = new Set<string>();
+  const relationPropertyNames = new Set<string>();
+
+  for (const task of tasks) {
+    for (const [key, prop] of Object.entries(task.properties)) {
+      if (prop.type === "relation" && shouldDisplayRelation(key) && prop.values?.length) {
+        relationPropertyNames.add(key);
+        prop.values.forEach((id) => relationPageIds.add(id));
+      }
+    }
+  }
+
+  // Resolve relation IDs → titles
+  const idToTitle = await resolveRelationTitles(relationPageIds);
+
+  // Replace relation IDs with resolved titles in all tasks
+  for (const task of tasks) {
+    for (const key of relationPropertyNames) {
+      const prop = task.properties[key];
+      if (prop?.type === "relation" && prop.values) {
+        task.properties[key] = {
+          ...prop,
+          values: prop.values.map((id) => idToTitle.get(id) ?? id).filter(Boolean),
+        };
+      }
+    }
+  }
+
+  // Determine visible columns and filter options
+  const filterableTypes = new Set(["select", "multi_select", "people", "status", "relation"]);
+  const displayableTypes = new Set(["select", "multi_select", "people", "status", "date", "rich_text", "checkbox", "number", "url", "formula", "relation"]);
 
   const allColumns = new Set<string>();
   const filterMap = new Map<string, { type: string; valueMap: Map<string, string> }>();
 
   for (const task of tasks) {
     for (const [key, prop] of Object.entries(task.properties)) {
-      if (prop.type === "title") continue; // name shown separately
+      if (prop.type === "title") continue;
+
+      // For relations, only show if in allowlist and has resolved titles
+      if (prop.type === "relation" && !relationPropertyNames.has(key)) continue;
+
       if (displayableTypes.has(prop.type)) allColumns.add(key);
 
       if (filterableTypes.has(prop.type)) {
         if (!filterMap.has(key)) filterMap.set(key, { type: prop.type, valueMap: new Map() });
         const entry = filterMap.get(key)!;
 
-        if (prop.values) {
-          prop.values.forEach((v) => {
-            const color = prop.itemColors?.[v] ?? "default";
-            if (!entry.valueMap.has(v)) entry.valueMap.set(v, color);
-          });
-        } else if (prop.value) {
-          if (!entry.valueMap.has(prop.value)) entry.valueMap.set(prop.value, prop.color ?? "default");
-        }
+        const vals = prop.values ?? (prop.value ? [prop.value] : []);
+        vals.forEach((v) => {
+          if (!entry.valueMap.has(v)) {
+            const color = prop.itemColors?.[v] ?? prop.color ?? "default";
+            entry.valueMap.set(v, color);
+          }
+        });
       }
     }
   }
