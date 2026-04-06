@@ -16,7 +16,7 @@ export async function GET() {
     const raw = await fetchQBOReport(
       session.realmId,
       session.accessToken,
-      "AgedReceivableSummary"
+      "AgedReceivables"
     );
     return NextResponse.json(parseAccountsReceivable(raw));
   } catch (err) {
