@@ -70,3 +70,13 @@ spec:
                 secretKeyRef:
                   name: QUICKBOOKS_SANDBOX
                   key: latest
+            - name: NOTION_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: NOTION_API_KEY
+                  key: latest
+            - name: NOTION_TASKS_DATABASE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: NOTION_TASKS_DATABASE_ID
+                  key: latest
