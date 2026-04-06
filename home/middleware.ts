@@ -7,7 +7,8 @@ export async function middleware(request: NextRequest) {
   const isPublicPath =
     pathname === "/login" ||
     pathname.startsWith("/auth/") ||
-    pathname.startsWith("/api/auth/");
+    pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/legal/");
 
   const token = request.cookies.get("session")?.value;
   const user = token ? await verifySessionToken(token) : null;

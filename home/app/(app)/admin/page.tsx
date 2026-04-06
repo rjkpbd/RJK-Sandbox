@@ -38,7 +38,7 @@ export default async function AdminDashboardPage() {
             {users!.map((u) => (
               <li key={u.id} className="flex items-center gap-3 text-sm">
                 <span className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                  {(u.name ?? u.email)[0].toUpperCase()}
+                  {(u.name || u.email || "?")[0].toUpperCase()}
                 </span>
                 <span className="text-white">{u.name ?? "—"}</span>
                 <span className="text-slate-400">{u.email}</span>
