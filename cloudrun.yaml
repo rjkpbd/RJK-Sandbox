@@ -22,7 +22,7 @@ spec:
             - name: NEXT_PUBLIC_SUPABASE_URL
               value: https://vzwblrdtltsrdimrjutf.supabase.co
             - name: NEXT_PUBLIC_APP_URL
-              value: https://rjk-sandbox-vdcl3qegiq-uc.a.run.app
+              value: https://rjk.paleblue.nyc
 
             # Secrets — pulled from Google Cloud Secret Manager at runtime
             - name: SUPABASE_SERVICE_ROLE_KEY

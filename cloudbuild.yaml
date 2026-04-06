@@ -30,7 +30,7 @@ steps:
       - --project=$PROJECT_ID
       - --platform=managed
       - --port=3000
-      - --set-env-vars=NODE_ENV=production,NEXT_PUBLIC_SUPABASE_URL=https://vzwblrdtltsrdimrjutf.supabase.co,NEXT_PUBLIC_APP_URL=https://rjk-sandbox-vdcl3qegiq-uc.a.run.app
+      - --set-env-vars=NODE_ENV=production,NEXT_PUBLIC_SUPABASE_URL=https://vzwblrdtltsrdimrjutf.supabase.co,NEXT_PUBLIC_APP_URL=https://rjk.paleblue.nyc
       - --set-secrets=SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,NEXT_PUBLIC_SUPABASE_ANON_KEY=NEXT_PUBLIC_SUPABASE_ANON_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,QUICKBOOKS_CLIENT_ID=QUICKBOOKS_CLIENT_ID:latest,QUICKBOOKS_CLIENT_SECRET=QUICKBOOKS_CLIENT_SECRET:latest,QUICKBOOKS_REDIRECT_URI=QUICKBOOKS_REDIRECT_URI:latest,QUICKBOOKS_SANDBOX=QUICKBOOKS_SANDBOX:latest
 
 images:
