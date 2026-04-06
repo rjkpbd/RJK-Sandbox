@@ -97,4 +97,17 @@ Each entry shape:
 
 ## Existing Modules
 
-_(none yet)_
+### notion-tasks
+
+Displays all tasks from a Notion database with client-side filtering by any column (Assignee, Client, Status, etc.).
+
+- **Route:** `/modules/notion-tasks`
+- **Widget:** Small dashboard widget showing total task count and per-status breakdown
+- **API:** `GET /api/notion/tasks` — fetches all pages from the database, parses properties, and returns tasks + filter options
+- **Key files:**
+  - `home/app/api/notion/tasks/route.ts` — Notion API proxy (paginates, parses all property types)
+  - `home/components/modules/notion-tasks/TasksView.tsx` — full page with search, filter dropdowns, sortable table
+  - `home/components/modules/notion-tasks/NotionTasksWidget.tsx` — dashboard widget
+- **Required env vars** (add to `home/.env.local`):
+  - `NOTION_API_KEY` — internal integration token from notion.so/my-integrations
+  - `NOTION_TASKS_DATABASE_ID` — ID of the Notion database (from the database URL)
