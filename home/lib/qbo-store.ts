@@ -9,7 +9,7 @@ export interface QBORecord {
 export async function getQBORecord(userId: string): Promise<QBORecord | null> {
   const db = createServerClient();
   const { data, error } = await db
-    .from("qbo_connections")
+    .from("RKSB_qbo_connections")
     .select("realm_id, refresh_token, refresh_token_expires_at")
     .eq("user_id", userId)
     .single();
@@ -22,7 +22,7 @@ export async function upsertQBORecord(
   record: QBORecord
 ): Promise<void> {
   const db = createServerClient();
-  await db.from("qbo_connections").upsert(
+  await db.from("RKSB_qbo_connections").upsert(
     { user_id: userId, ...record, updated_at: new Date().toISOString() },
     { onConflict: "user_id" }
   );
@@ -30,5 +30,5 @@ export async function upsertQBORecord(
 
 export async function deleteQBORecord(userId: string): Promise<void> {
   const db = createServerClient();
-  await db.from("qbo_connections").delete().eq("user_id", userId);
+  await db.from("RKSB_qbo_connections").delete().eq("user_id", userId);
 }
