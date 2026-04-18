@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForTokens } from "@/lib/quickbooks";
+import { verifySessionToken } from "@/lib/session";
+import { upsertQBORecord } from "@/lib/qbo-store";
 import { cookies } from "next/headers";
 
 export async function GET(request: NextRequest) {
@@ -14,9 +16,7 @@ export async function GET(request: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin;
   const redirect = (err: string) =>
-    NextResponse.redirect(
-      new URL(`/modules/pbd-finance?error=${err}`, appUrl)
-    );
+    NextResponse.redirect(new URL(`/modules/pbd-finance?error=${err}`, appUrl));
 
   if (error) return redirect("auth_denied");
   if (!code || !realmId || !state || state !== storedState)
@@ -46,9 +46,21 @@ export async function GET(request: NextRequest) {
     });
     cookieStore.delete("qbo_oauth_state");
 
-    return NextResponse.redirect(
-      new URL("/modules/pbd-finance", appUrl)
-    );
+    // Persist to Supabase so connection survives across devices/sessions
+    const sessionToken = cookieStore.get("session")?.value;
+    const user = sessionToken ? await verifySessionToken(sessionToken) : null;
+    if (user) {
+      const expiresAt = new Date(
+        Date.now() + tokens.x_refresh_token_expires_in * 1000
+      ).toISOString();
+      await upsertQBORecord(user.sub, {
+        realm_id: realmId,
+        refresh_token: tokens.refresh_token,
+        refresh_token_expires_at: expiresAt,
+      });
+    }
+
+    return NextResponse.redirect(new URL("/modules/pbd-finance", appUrl));
   } catch (err) {
     console.error("QBO callback error:", err);
     return redirect("token_exchange");
