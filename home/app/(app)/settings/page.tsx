@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { verifySessionToken } from "@/lib/session";
 import UsersManager from "./UsersManager";
+import MCPServersManager from "@/components/admin/MCPServersManager";
 
 export default async function SettingsPage() {
   const cookieStore = await cookies();
@@ -50,7 +51,12 @@ export default async function SettingsPage() {
       </div>
 
       {/* Admin section */}
-      {isAdmin && <UsersManager />}
+      {isAdmin && (
+        <>
+          <UsersManager />
+          <MCPServersManager />
+        </>
+      )}
     </div>
   );
 }
