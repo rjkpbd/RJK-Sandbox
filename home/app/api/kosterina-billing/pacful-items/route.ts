@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Determine Shopify match status for each item
-  const rows = (items ?? []) as Array<{ order_key: string | null; [key: string]: unknown }>;
+  const rows = (items ?? []) as unknown as Array<{ order_key: string | null; [key: string]: unknown }>;
   const orderKeys = rows
     .map((r) => r.order_key)
     .filter(Boolean) as string[];
