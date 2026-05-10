@@ -47,8 +47,9 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Determine Shopify match status for each item
-  const orderKeys = (items ?? [])
-    .map((r: { order_key: string | null }) => r.order_key)
+  const rows = (items ?? []) as Array<{ order_key: string | null; [key: string]: unknown }>;
+  const orderKeys = rows
+    .map((r) => r.order_key)
     .filter(Boolean) as string[];
 
   const matchSet = new Set<string>();
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
     for (const m of (matches ?? [])) matchSet.add(m.order_key);
   }
 
-  const enriched = (items ?? []).map((item: Record<string, unknown>) => ({
+  const enriched = rows.map((item) => ({
     ...item,
     shopify_match: item.order_key ? matchSet.has(item.order_key as string) : false,
   }));
