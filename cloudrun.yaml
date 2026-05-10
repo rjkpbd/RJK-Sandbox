@@ -11,10 +11,16 @@ spec:
         run.googleapis.com/execution-environment: gen2
     spec:
       serviceAccountName: 843833531624-compute@developer.gserviceaccount.com
+      # 60-minute timeout — needed for long-running SSE streams from Claude Inbox
+      timeoutSeconds: 3600
       containers:
         - image: IMAGE  # e.g. gcr.io/pbd-rjk/home:latest
           ports:
             - containerPort: 3000
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "1"
           env:
             # Non-sensitive env vars — set directly
             - name: NODE_ENV
@@ -23,6 +29,8 @@ spec:
               value: https://vzwblrdtltsrdimrjutf.supabase.co
             - name: NEXT_PUBLIC_APP_URL
               value: https://rjk.paleblue.nyc
+            - name: MISSIVE_WEBHOOK_USER_ID
+              value: 1c80f5cd-f16b-4b3f-9bcb-41584fb95cbc
 
             # Secrets — pulled from Google Cloud Secret Manager at runtime
             - name: SUPABASE_SERVICE_ROLE_KEY
@@ -79,4 +87,14 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: NOTION_TASKS_DATABASE_ID
+                  key: latest
+            - name: MISSIVE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: MISSIVE_API_KEY
+                  key: latest
+            - name: MISSIVE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: MISSIVE_WEBHOOK_SECRET
                   key: latest

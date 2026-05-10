@@ -13,9 +13,10 @@ interface SidebarLinkProps {
   icon: string;
   label: string;
   collapsed: boolean;
+  onClick?: () => void;
 }
 
-export default function SidebarLink({ href, icon, label, collapsed }: SidebarLinkProps) {
+export default function SidebarLink({ href, icon, label, collapsed, onClick }: SidebarLinkProps) {
   const pathname = usePathname();
   const isActive = pathname === href;
 
@@ -24,6 +25,7 @@ export default function SidebarLink({ href, icon, label, collapsed }: SidebarLin
   return (
     <Link
       href={href}
+      onClick={onClick}
       title={collapsed ? label : undefined}
       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
         ${isActive

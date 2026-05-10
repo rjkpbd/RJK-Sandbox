@@ -1,11 +1,29 @@
 import { Boxes } from "lucide-react";
 import Link from "next/link";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+
+  const errorMessage =
+    error === "unauthorized"
+      ? "You don't have permission to access this application."
+      : error === "auth"
+      ? "Authentication failed. Please try again."
+      : null;
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-8">
+          {errorMessage && (
+            <div className="bg-red-950/60 border border-red-700 text-red-300 text-sm rounded-lg px-4 py-3 max-w-sm text-center">
+              {errorMessage}
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <Boxes size={32} className="text-indigo-400" />
             <span className="text-white text-2xl font-semibold tracking-wide">

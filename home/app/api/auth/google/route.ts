@@ -1,29 +1,35 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 export async function GET() {
-  const state = randomBytes(16).toString("hex");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+  const cookieStore = await cookies();
+  const pendingCookies: Array<{ name: string; value: string; options: CookieOptions }> = [];
 
-  const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID!,
-    redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-    response_type: "code",
-    scope: "openid email profile",
-    state,
-  });
-
-  const response = NextResponse.redirect(
-    `https://accounts.google.com/o/oauth2/v2/auth?${params}`
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(cookiesToSet) { pendingCookies.push(...cookiesToSet); },
+      },
+    }
   );
 
-  // Store state in a short-lived httpOnly cookie for CSRF verification
-  response.cookies.set("oauth_state", state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 10, // 10 minutes
-    path: "/",
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${appUrl}/auth/callback` },
   });
 
+  if (error || !data.url) {
+    return NextResponse.redirect(`${appUrl}/login?error=auth`);
+  }
+
+  const response = NextResponse.redirect(data.url);
+  pendingCookies.forEach(({ name, value, options }) =>
+    response.cookies.set(name, value, options)
+  );
   return response;
 }

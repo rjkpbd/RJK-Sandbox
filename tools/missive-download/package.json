@@ -1,0 +1,9 @@
+{
+  "name": "missive-download",
+  "version": "1.0.0",
+  "description": "Download UNFI emails from Missive API to orders@kosterina.com",
+  "type": "module",
+  "scripts": {
+    "download": "node download.mjs"
+  }
+}

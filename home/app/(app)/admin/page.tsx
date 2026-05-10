@@ -1,25 +1,27 @@
-import { cookies } from "next/headers";
-import { verifySessionToken } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 export default async function AdminDashboardPage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("session")?.value;
-  const user = token ? await verifySessionToken(token) : null;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const supabase = createServerClient();
-  const { data: users } = await supabase
+  const admin = createAdminClient();
+  const { data: users } = await admin
     .from("SB-users")
     .select("id, email, name")
     .order("created_at", { ascending: false });
 
   const userCount = users?.length ?? 0;
+  const displayName =
+    user?.user_metadata?.full_name ??
+    user?.user_metadata?.name ??
+    user?.email ??
+    "Admin";
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-4 sm:p-6 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-        <p className="text-slate-400 text-sm mt-1">Welcome back, {user?.name}.</p>
+        <p className="text-slate-400 text-sm mt-1">Welcome back, {displayName}.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
@@ -36,12 +38,12 @@ export default async function AdminDashboardPage() {
         ) : (
           <ul className="space-y-2">
             {users!.map((u) => (
-              <li key={u.id} className="flex items-center gap-3 text-sm">
+              <li key={u.id} className="flex items-center gap-3 text-sm min-w-0">
                 <span className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
                   {(u.name || u.email || "?")[0].toUpperCase()}
                 </span>
-                <span className="text-white">{u.name ?? "—"}</span>
-                <span className="text-slate-400">{u.email}</span>
+                <span className="text-white shrink-0">{u.name ?? "—"}</span>
+                <span className="text-slate-400 truncate">{u.email}</span>
               </li>
             ))}
           </ul>

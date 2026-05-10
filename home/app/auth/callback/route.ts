@@ -1,57 +1,52 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSessionToken, cookieOptions } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient as createAdminSupabase } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { ADMIN_EMAIL } from "@/lib/constants";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
   const code = searchParams.get("code");
-  const state = searchParams.get("state");
-  const storedState = request.cookies.get("oauth_state")?.value;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
-  if (!code || !state || state !== storedState) {
+  if (!code) {
     return NextResponse.redirect(`${appUrl}/login?error=auth`);
   }
 
-  // Exchange authorization code for tokens
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-      grant_type: "authorization_code",
-    }),
-  });
+  const cookieStore = await cookies();
+  const pendingCookies: Array<{ name: string; value: string; options: CookieOptions }> = [];
 
-  if (!tokenRes.ok) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(cookiesToSet) { pendingCookies.push(...cookiesToSet); },
+      },
+    }
+  );
+
+  const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (error || !session) {
     return NextResponse.redirect(`${appUrl}/login?error=auth`);
   }
 
-  const { access_token } = await tokenRes.json();
+  const { user } = session;
+  const email = user.email!;
 
-  // Fetch user info from Google
-  const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: { Authorization: `Bearer ${access_token}` },
-  });
+  const admin = createAdminSupabase(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
 
-  if (!userRes.ok) {
-    return NextResponse.redirect(`${appUrl}/login?error=auth`);
-  }
-
-  const { sub, email, name, picture } = await userRes.json();
-
-  // Determine role — admin is hardcoded, others must be in SB-users
   let role: "admin" | "user" | null = null;
-
   if (email === ADMIN_EMAIL) {
     role = "admin";
   } else {
-    const supabase = createServerClient();
-    const { data } = await supabase
+    const { data } = await admin
       .from("SB-users")
       .select("email")
       .eq("email", email)
@@ -59,17 +54,24 @@ export async function GET(request: NextRequest) {
     if (data) role = "user";
   }
 
-  // Not authorized — redirect to google.com
+  const applyAndRedirect = (destination: string) => {
+    const response = NextResponse.redirect(destination);
+    pendingCookies.forEach(({ name, value, options }) =>
+      response.cookies.set(name, value, options)
+    );
+    return response;
+  };
+
   if (!role) {
-    return NextResponse.redirect("https://www.google.com");
+    // Sign out the session we just created so the user isn't left in a half-authenticated state
+    await admin.auth.admin.signOut(session.access_token);
+    const response = NextResponse.redirect(`${appUrl}/login?error=unauthorized`);
+    // Do not apply session cookies — session was invalidated above
+    return response;
   }
 
-  const sessionToken = await createSessionToken({ sub, email, name, picture, role });
-  const destination = role === "admin" ? "/admin" : "/dashboard";
+  // Persist role in app_metadata (tamper-proof, available in all future getUser() calls)
+  await admin.auth.admin.updateUserById(user.id, { app_metadata: { role } });
 
-  const response = NextResponse.redirect(`${appUrl}${destination}`);
-  response.cookies.set(cookieOptions.name, sessionToken, cookieOptions);
-  response.cookies.delete("oauth_state");
-
-  return response;
+  return applyAndRedirect(`${appUrl}${role === "admin" ? "/admin" : "/dashboard"}`);
 }
